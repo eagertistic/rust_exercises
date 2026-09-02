@@ -4,10 +4,10 @@ use std::error::Error;
 use std::fs;
 use std::process;
 
-struct Config {
-    query: String,
-    file_path: String,
-    ignore_case: bool,
+pub struct Config {
+    pub query: String,
+    pub file_path: String,
+    pub ignore_case: bool,
 }
 
 impl Config {
@@ -18,8 +18,20 @@ impl Config {
 
         let query = args[1].clone();
         let file_path = args[2].clone();
+        let ignore_flag = args.iter().any(|arg| arg == "--ignore-case");
+        let sensitive_flag = args.iter().any(|arg| arg == "--case-sensitive");
 
-        let ignore_case = env::var("IGNORE_CASE").is_ok();
+        if ignore_flag && sensitive_flag {
+            return Err("cannot use --ignore-case and --case-sensitive together");
+        }
+
+        let ignore_case = if ignore_flag {
+            true
+        } else if sensitive_flag {
+            false
+        } else {
+            env::var("IGNORE_CASE").is_ok()
+        };
 
         Ok(Config {
             query,
@@ -57,5 +69,56 @@ fn main() {
     if let Err(e) = run(config) {
         println!("Application error: {e}");
         process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn double_flags() {
+        let args = vec!["--ignore-case".to_string(), "--case-sensitive".to_string()];
+
+        let result = Config::build(&args);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn flag_overrides() {
+        unsafe {
+            env::set_var("IGNORE_CASE", "1");
+        }
+
+        let args = vec![
+            "minigrep".to_string(),
+            "duct".to_string(),
+            "poem.txt".to_string(),
+            "--case-sensitive".to_string(),
+        ];
+
+        let result = Config::build(&args).unwrap();
+
+        assert_eq!(result.ignore_case, false);
+
+        unsafe {
+            env::remove_var("IGNORE_CASE");
+        }
+    }
+
+    #[test]
+    fn case_insensitive() {
+        let query: &str = "rUsT";
+        let contents = "\
+Rust:
+safe, fast, productive.
+Pick three.
+Trust me.";
+
+        assert_eq!(
+            vec!["Rust:", "Trust me."],
+            search_case_insensitive(query, contents)
+        );
     }
 }
