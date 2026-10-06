@@ -1,0 +1,11 @@
+[package]
+name = "minigrep_plus"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[[bin]]
+name = "minigrep_plus"
+path = "src/main.rs"
+
